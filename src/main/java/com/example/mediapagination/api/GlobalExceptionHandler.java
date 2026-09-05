@@ -1,6 +1,7 @@
 package com.example.mediapagination.api;
 
 import com.example.mediapagination.application.model.PageOutsideWindowException;
+import com.example.mediapagination.application.model.DeepPageUnavailableException;
 import com.example.mediapagination.application.model.UnsupportedStrategyException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.MDC;
@@ -13,6 +14,13 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(DeepPageUnavailableException.class)
+    public ResponseEntity<ApiError> deepPageUnavailable(
+            DeepPageUnavailableException exception) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE,
+                "DEEP_PAGE_TEMPORARILY_UNAVAILABLE", exception.getMessage());
+    }
 
     @ExceptionHandler(PageOutsideWindowException.class)
     public ResponseEntity<ApiError> pageOutsideWindow(PageOutsideWindowException exception) {

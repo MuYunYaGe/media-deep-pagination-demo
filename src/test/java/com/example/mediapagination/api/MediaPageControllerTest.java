@@ -1,6 +1,7 @@
 package com.example.mediapagination.api;
 
 import com.example.mediapagination.application.model.CacheStatus;
+import com.example.mediapagination.application.model.DeepPageUnavailableException;
 import com.example.mediapagination.application.model.MediaPageQuery;
 import com.example.mediapagination.application.model.MediaPageResult;
 import com.example.mediapagination.application.model.PageOutsideWindowException;
@@ -80,5 +81,20 @@ class MediaPageControllerTest {
                         .param("strategy", "cursor"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_PAGE_REQUEST"));
+    }
+
+    @Test
+    void deepPageRedisFailureReturnsServiceUnavailable() throws Exception {
+        when(facade.query(any())).thenThrow(new DeepPageUnavailableException());
+
+        mockMvc.perform(get("/api/v1/categories/1001/media")
+                        .param("strategy", "zset")
+                        .param("page", "102")
+                        .param("size", "10"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code")
+                        .value("DEEP_PAGE_TEMPORARILY_UNAVAILABLE"))
+                .andExpect(jsonPath("$.message").value(
+                        "Redis index is unavailable and this page is too deep for MySQL fallback"));
     }
 }
