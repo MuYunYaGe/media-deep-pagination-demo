@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: media-deep-pagination-demo
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/media_demo?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:media_demo}
+    password: ${DB_PASSWORD:media_demo}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 1s
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+mybatis:
+  mapper-locations: classpath:/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 500
+
+demo:
+  pagination:
+    window-size: ${PAGINATION_WINDOW_SIZE:30000}
+    shallow-fallback-max-offset: ${SHALLOW_FALLBACK_MAX_OFFSET:1000}
+    index-ttl: ${INDEX_TTL:PT30M}
+    empty-marker-ttl: ${EMPTY_MARKER_TTL:PT2M}
+    lock-ttl: ${LOCK_TTL:PT2M}
+    lock-wait: ${LOCK_WAIT:PT0.5S}
+    warmup-lock-ttl: ${WARMUP_LOCK_TTL:PT10M}
+    warmup-interval: ${WARMUP_INTERVAL:PT5M}
+    refresh-before: ${REFRESH_BEFORE:PT5M}
+    rebuild-batch-size: ${REBUILD_BATCH_SIZE:500}
+    hot-category-ids: ${HOT_CATEGORY_IDS:1001,1002}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+server:
+  shutdown: graceful

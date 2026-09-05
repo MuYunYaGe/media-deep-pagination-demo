@@ -1,1 +1,8 @@
 .worktrees/
+target/
+.idea/
+.vscode/
+.env
+*.log
+.mvn/wrapper/dists/
+.verification-libs/
