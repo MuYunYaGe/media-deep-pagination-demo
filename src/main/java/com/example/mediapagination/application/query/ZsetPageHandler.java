@@ -32,6 +32,7 @@ public class ZsetPageHandler implements MediaPageHandler {
     private final PaginationProperties properties;
     private final StaleIndexCleaner staleCleaner;
     private final OffsetPageHandler offsetHandler;
+    private final PaginationMetrics metrics;
 
     public ZsetPageHandler(
             MediaIndexStore index,
@@ -41,7 +42,8 @@ public class ZsetPageHandler implements MediaPageHandler {
             PageWindow pageWindow,
             PaginationProperties properties,
             StaleIndexCleaner staleCleaner,
-            OffsetPageHandler offsetHandler) {
+            OffsetPageHandler offsetHandler,
+            PaginationMetrics metrics) {
         this.index = Objects.requireNonNull(index, "index");
         this.mysql = Objects.requireNonNull(mysql, "mysql");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator");
@@ -50,6 +52,7 @@ public class ZsetPageHandler implements MediaPageHandler {
         this.properties = Objects.requireNonNull(properties, "properties");
         this.staleCleaner = Objects.requireNonNull(staleCleaner, "staleCleaner");
         this.offsetHandler = Objects.requireNonNull(offsetHandler, "offsetHandler");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
     @Override
@@ -65,19 +68,31 @@ public class ZsetPageHandler implements MediaPageHandler {
         }
 
         RankRange ranks = pageWindow.ranks(query.page(), query.size());
+        PaginationMetrics.PageSample sample = metrics.startPage(query, ranks.start());
+        try {
+            return sample.complete(queryIndex(query, ranks, sample));
+        } catch (RuntimeException failure) {
+            sample.fail(failure);
+            throw failure;
+        }
+    }
+
+    private MediaPageResult queryIndex(MediaPageQuery query, RankRange ranks,
+                                       PaginationMetrics.PageSample sample) {
         IndexState state;
         try {
-            state = index.state(query.categoryId());
+            state = sample.redis(() -> index.state(query.categoryId()));
         } catch (DataAccessException redisFailure) {
-            return fallbackOrThrow(query, ranks.start());
+            return fallbackOrThrow(query, ranks.start(), sample);
         }
 
         CacheStatus cacheStatus = CacheStatus.HIT;
         if (state == IndexState.MISSING) {
             try {
-                IndexLoadOutcome outcome = coordinator.ensureAvailable(query.categoryId());
+                IndexLoadOutcome outcome = sample.redis(
+                        () -> coordinator.ensureAvailable(query.categoryId()));
                 if (outcome == IndexLoadOutcome.UNAVAILABLE) {
-                    return fallbackOrThrow(query, ranks.start());
+                    return fallbackOrThrow(query, ranks.start(), sample);
                 }
                 if (outcome == IndexLoadOutcome.EMPTY) {
                     return emptyResult(query);
@@ -85,30 +100,32 @@ public class ZsetPageHandler implements MediaPageHandler {
                 state = IndexState.READY;
                 cacheStatus = CacheStatus.MISS_REBUILT;
             } catch (DataAccessException redisFailure) {
-                return fallbackOrThrow(query, ranks.start());
+                return fallbackOrThrow(query, ranks.start(), sample);
             }
         }
         if (state == IndexState.EMPTY) {
             return emptyResult(query);
         }
 
-        List<Long> orderedIds;
-        long total;
+        IndexPage page;
         try {
-            orderedIds = index.reverseRange(query.categoryId(), ranks);
-            total = index.cardinality(query.categoryId());
+            page = sample.redis(() -> new IndexPage(
+                    index.reverseRange(query.categoryId(), ranks),
+                    index.cardinality(query.categoryId())));
         } catch (DataAccessException redisFailure) {
-            return fallbackOrThrow(query, ranks.start());
+            return fallbackOrThrow(query, ranks.start(), sample);
         }
-        return assemble(query, orderedIds, total, cacheStatus);
+        return assemble(query, page.orderedIds(), page.total(), cacheStatus, sample);
     }
 
     private MediaPageResult assemble(MediaPageQuery query, List<Long> orderedIds,
-                                     long total, CacheStatus cacheStatus) {
+                                     long total, CacheStatus cacheStatus,
+                                     PaginationMetrics.PageSample sample) {
         List<Media> unorderedDetails = orderedIds.isEmpty()
                 ? List.of()
-                : mysql.findPublishedByIds(orderedIds);
-        List<Media> items = orderer.byIds(orderedIds, unorderedDetails);
+                : sample.database(() -> mysql.findPublishedByIds(orderedIds));
+        List<Media> items = sample.reorder(
+                () -> orderer.byIds(orderedIds, unorderedDetails));
 
         Set<Long> availableIds = new HashSet<>();
         unorderedDetails.forEach(media -> availableIds.add(media.id()));
@@ -131,12 +148,17 @@ public class ZsetPageHandler implements MediaPageHandler {
                 false, List.of());
     }
 
-    private MediaPageResult fallbackOrThrow(MediaPageQuery query, long offset) {
+    private MediaPageResult fallbackOrThrow(MediaPageQuery query, long offset,
+                                            PaginationMetrics.PageSample sample) {
         if (offset > properties.getShallowFallbackMaxOffset()) {
             throw new DeepPageUnavailableException();
         }
         MediaPageQuery mysqlQuery = new MediaPageQuery(query.categoryId(),
                 PageStrategy.OFFSET, query.page(), query.size());
-        return offsetHandler.query(mysqlQuery).asDegraded(CacheStatus.FALLBACK_MYSQL);
+        return sample.database(() -> offsetHandler.queryWithoutMetrics(mysqlQuery))
+                .asDegraded(CacheStatus.FALLBACK_MYSQL);
+    }
+
+    private record IndexPage(List<Long> orderedIds, long total) {
     }
 }

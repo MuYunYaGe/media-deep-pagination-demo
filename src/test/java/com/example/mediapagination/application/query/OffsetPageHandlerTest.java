@@ -7,6 +7,7 @@ import com.example.mediapagination.application.model.PageStrategy;
 import com.example.mediapagination.application.port.MediaQueryStore;
 import com.example.mediapagination.domain.Media;
 import com.example.mediapagination.domain.MediaStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,10 +29,13 @@ class OffsetPageHandlerTest {
     private MediaQueryStore store;
 
     private OffsetPageHandler handler;
+    private SimpleMeterRegistry metricsRegistry;
 
     @BeforeEach
     void setUp() {
-        handler = new OffsetPageHandler(store, new PageWindow(30_000));
+        metricsRegistry = new SimpleMeterRegistry();
+        handler = new OffsetPageHandler(store, new PageWindow(30_000),
+                new PaginationMetrics(metricsRegistry));
     }
 
     @Test
@@ -49,6 +53,10 @@ class OffsetPageHandlerTest {
         assertThat(result.cacheStatus()).isEqualTo(CacheStatus.NOT_USED);
         assertThat(result.degraded()).isFalse();
         verify(store).findPublishedPage(1001L, 10L, 10);
+        assertThat(metricsRegistry.get(PaginationMetrics.PAGE_DURATION)
+                .tag("strategy", "offset")
+                .tag("cacheStatus", "not_used")
+                .timer().count()).isEqualTo(1L);
     }
 
     @Test

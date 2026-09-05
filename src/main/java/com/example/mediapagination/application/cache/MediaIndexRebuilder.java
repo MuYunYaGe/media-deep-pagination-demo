@@ -8,6 +8,7 @@ import com.example.mediapagination.application.port.Lease;
 import com.example.mediapagination.application.port.LeaseLock;
 import com.example.mediapagination.application.port.MediaIndexStore;
 import com.example.mediapagination.application.port.MediaQueryStore;
+import com.example.mediapagination.application.query.PaginationMetrics;
 import com.example.mediapagination.config.PaginationProperties;
 import com.example.mediapagination.infrastructure.redis.MediaIndexKeys;
 import org.slf4j.Logger;
@@ -36,18 +37,21 @@ public class MediaIndexRebuilder {
     private final LeaseLock lock;
     private final MediaIndexKeys keys;
     private final PaginationProperties properties;
+    private final PaginationMetrics metrics;
 
     public MediaIndexRebuilder(
             MediaQueryStore mysql,
             MediaIndexStore index,
             LeaseLock lock,
             MediaIndexKeys keys,
-            PaginationProperties properties) {
+            PaginationProperties properties,
+            PaginationMetrics metrics) {
         this.mysql = Objects.requireNonNull(mysql, "mysql");
         this.index = Objects.requireNonNull(index, "index");
         this.lock = Objects.requireNonNull(lock, "lock");
         this.keys = Objects.requireNonNull(keys, "keys");
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.metrics = Objects.requireNonNull(metrics, "metrics");
     }
 
     public RebuildResult rebuild(long categoryId, RebuildMode mode) {
@@ -60,11 +64,11 @@ public class MediaIndexRebuilder {
         try {
             if (mode == RebuildMode.IF_ABSENT
                     && index.state(categoryId) != IndexState.MISSING) {
-                return RebuildResult.skippedPresent(elapsed(started));
+                return measured(RebuildResult.skippedPresent(elapsed(started)));
             }
         } catch (RuntimeException failure) {
             log.warn("media index preflight failed categoryId={}", categoryId, failure);
-            return RebuildResult.failed(0L, elapsed(started));
+            return measured(RebuildResult.failed(0L, elapsed(started)));
         }
 
         Optional<Lease> acquired;
@@ -72,10 +76,10 @@ public class MediaIndexRebuilder {
             acquired = lock.tryAcquire(keys.lock(categoryId), properties.getLockTtl());
         } catch (RuntimeException failure) {
             log.warn("media index lease acquisition failed categoryId={}", categoryId, failure);
-            return RebuildResult.failed(0L, elapsed(started));
+            return measured(RebuildResult.failed(0L, elapsed(started)));
         }
         if (acquired.isEmpty()) {
-            return RebuildResult.skippedLocked(elapsed(started));
+            return measured(RebuildResult.skippedLocked(elapsed(started)));
         }
 
         Lease lease = acquired.orElseThrow();
@@ -85,7 +89,7 @@ public class MediaIndexRebuilder {
         try {
             if (mode == RebuildMode.IF_ABSENT
                     && index.state(categoryId) != IndexState.MISSING) {
-                return RebuildResult.skippedPresent(elapsed(started));
+                return measured(RebuildResult.skippedPresent(elapsed(started)));
             }
 
             temporaryKey = index.temporaryKey(categoryId, UUID.randomUUID());
@@ -115,24 +119,24 @@ public class MediaIndexRebuilder {
             if (entryCount == 0L) {
                 index.markEmpty(categoryId, properties.getEmptyMarkerTtl());
                 finalized = true;
-                return RebuildResult.empty(elapsed(started));
+                return measured(RebuildResult.empty(elapsed(started)));
             }
 
             long actualCardinality = index.cardinality(temporaryKey);
             if (actualCardinality != entryCount) {
                 log.warn("media index cardinality mismatch categoryId={} expected={} actual={}",
                         categoryId, entryCount, actualCardinality);
-                return RebuildResult.failed(entryCount, elapsed(started));
+                return measured(RebuildResult.failed(entryCount, elapsed(started)));
             }
 
             index.expire(temporaryKey, jittered(properties.getIndexTtl()));
             index.replaceFormal(categoryId, temporaryKey);
             finalized = true;
-            return RebuildResult.rebuilt(entryCount, elapsed(started));
+            return measured(RebuildResult.rebuilt(entryCount, elapsed(started)));
         } catch (RuntimeException failure) {
             log.warn("media index rebuild failed categoryId={} entriesRead={}",
                     categoryId, entryCount, failure);
-            return RebuildResult.failed(entryCount, elapsed(started));
+            return measured(RebuildResult.failed(entryCount, elapsed(started)));
         } finally {
             if (temporaryKey != null && !finalized) {
                 safeDelete(temporaryKey, categoryId);
@@ -172,5 +176,9 @@ public class MediaIndexRebuilder {
 
     private static Duration elapsed(long started) {
         return Duration.ofNanos(Math.max(0L, System.nanoTime() - started));
+    }
+
+    private RebuildResult measured(RebuildResult result) {
+        return metrics.recordRebuild(result);
     }
 }

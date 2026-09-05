@@ -10,6 +10,8 @@ import com.example.mediapagination.application.port.MediaIndexStore;
 import com.example.mediapagination.application.port.MediaQueryStore;
 import com.example.mediapagination.config.PaginationProperties;
 import com.example.mediapagination.infrastructure.redis.MediaIndexKeys;
+import com.example.mediapagination.application.query.PaginationMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +42,7 @@ class MediaIndexRebuilderTest {
     private final MediaIndexKeys keys = new MediaIndexKeys();
     private PaginationProperties properties;
     private MediaIndexRebuilder rebuilder;
+    private SimpleMeterRegistry metricsRegistry;
 
     @BeforeEach
     void setUp() {
@@ -47,7 +50,9 @@ class MediaIndexRebuilderTest {
         properties.setWindowSize(3);
         properties.setRebuildBatchSize(2);
         properties.setIndexTtl(Duration.ofMinutes(30));
-        rebuilder = new MediaIndexRebuilder(mysql, index, lock, keys, properties);
+        metricsRegistry = new SimpleMeterRegistry();
+        rebuilder = new MediaIndexRebuilder(mysql, index, lock, keys, properties,
+                new PaginationMetrics(metricsRegistry));
     }
 
     @Test
@@ -93,6 +98,8 @@ class MediaIndexRebuilderTest {
 
         assertThat(result.status()).isEqualTo(RebuildResult.Status.REBUILT);
         assertThat(result.entryCount()).isEqualTo(3L);
+        assertThat(metricsRegistry.get(PaginationMetrics.REBUILD_DURATION)
+                .tag("outcome", "rebuilt").timer().count()).isEqualTo(1L);
         InOrder order = inOrder(index);
         order.verify(index).append("temp-key",
                 List.of(entry(5L, 5_000L), entry(4L, 4_000L)));

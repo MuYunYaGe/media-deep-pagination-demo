@@ -49,3 +49,7 @@ management:
 
 server:
   shutdown: graceful
+
+logging:
+  pattern:
+    level: "%5p [traceId:%X{traceId:-}]"

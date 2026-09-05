@@ -15,6 +15,7 @@ import com.example.mediapagination.application.port.MediaQueryStore;
 import com.example.mediapagination.config.PaginationProperties;
 import com.example.mediapagination.domain.Media;
 import com.example.mediapagination.domain.MediaStatus;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,13 +45,15 @@ class ZsetPageHandlerTest {
     @Mock private OffsetPageHandler offset;
 
     private ZsetPageHandler handler;
+    private SimpleMeterRegistry metricsRegistry;
 
     @BeforeEach
     void setUp() {
         PaginationProperties properties = new PaginationProperties();
+        metricsRegistry = new SimpleMeterRegistry();
         handler = new ZsetPageHandler(index, mysql, coordinator,
                 new MediaOrderer(), new PageWindow(properties.getWindowSize()),
-                properties, cleaner, offset);
+                properties, cleaner, offset, new PaginationMetrics(metricsRegistry));
     }
 
     @Test
@@ -70,6 +73,12 @@ class ZsetPageHandlerTest {
         assertThat(result.windowLimited()).isTrue();
         assertThat(result.cacheStatus()).isEqualTo(CacheStatus.HIT);
         verify(cleaner, never()).removeAsync(anyLong(), anyList());
+        assertThat(metricsRegistry.get(PaginationMetrics.REDIS_DURATION)
+                .tag("strategy", "zset").timer().count()).isPositive();
+        assertThat(metricsRegistry.get(PaginationMetrics.DB_DURATION)
+                .tag("strategy", "zset").timer().count()).isEqualTo(1L);
+        assertThat(metricsRegistry.get(PaginationMetrics.REORDER_DURATION)
+                .tag("strategy", "zset").timer().count()).isEqualTo(1L);
     }
 
     @Test
