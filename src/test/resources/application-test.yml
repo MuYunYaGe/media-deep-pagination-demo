@@ -1,0 +1,8 @@
+demo:
+  pagination:
+    hot-category-ids: []
+
+logging:
+  level:
+    root: WARN
+    com.example.mediapagination: INFO
