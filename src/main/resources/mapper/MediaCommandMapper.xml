@@ -30,4 +30,14 @@
         WHERE id = #{id}
     </update>
 
+    <insert id="insertSeedBatch">
+        INSERT INTO media
+            (category_id, title, publish_time, status, created_at, updated_at)
+        VALUES
+        <foreach collection="rows" item="row" separator=",">
+            (#{row.categoryId}, #{row.title}, #{row.publishTime}, #{row.status},
+             #{row.createdAt}, #{row.updatedAt})
+        </foreach>
+    </insert>
+
 </mapper>

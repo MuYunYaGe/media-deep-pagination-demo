@@ -1,10 +1,12 @@
 package com.example.mediapagination.infrastructure.mysql;
 
 import com.example.mediapagination.domain.MediaStatus;
+import com.example.mediapagination.application.model.SeedMedia;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.Instant;
+import java.util.List;
 
 @Mapper
 public interface MediaCommandMapper {
@@ -25,4 +27,6 @@ public interface MediaCommandMapper {
             @Param("id") long id,
             @Param("publishTime") Instant publishTime,
             @Param("updatedAt") Instant updatedAt);
+
+    int insertSeedBatch(@Param("rows") List<SeedMedia> rows);
 }

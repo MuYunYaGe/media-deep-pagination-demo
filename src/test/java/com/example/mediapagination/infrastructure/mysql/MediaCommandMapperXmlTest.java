@@ -26,5 +26,6 @@ class MediaCommandMapperXmlTest {
         assertThat(configuration.hasStatement(namespace + ".updateStatus")).isTrue();
         assertThat(configuration.hasStatement(namespace + ".updateCategory")).isTrue();
         assertThat(configuration.hasStatement(namespace + ".updatePublishTime")).isTrue();
+        assertThat(configuration.hasStatement(namespace + ".insertSeedBatch")).isTrue();
     }
 }

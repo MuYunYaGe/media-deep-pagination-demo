@@ -2,6 +2,7 @@ package com.example.mediapagination.infrastructure.mysql;
 
 import com.example.mediapagination.application.model.CreateMediaCommand;
 import com.example.mediapagination.application.model.MediaNotFoundException;
+import com.example.mediapagination.application.model.SeedMedia;
 import com.example.mediapagination.application.port.MediaCommandStore;
 import com.example.mediapagination.domain.Media;
 import com.example.mediapagination.domain.MediaStatus;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.List;
 
 @Repository
 public class MyBatisMediaCommandStore implements MediaCommandStore {
@@ -63,6 +65,19 @@ public class MyBatisMediaCommandStore implements MediaCommandStore {
         Objects.requireNonNull(updatedAt, "updatedAt");
         requireUpdated(id, commands.updatePublishTime(id, publishTime, updatedAt));
         return load(id);
+    }
+
+    @Override
+    public void insertSeedBatch(List<SeedMedia> rows) {
+        Objects.requireNonNull(rows, "rows");
+        if (rows.isEmpty() || rows.size() > 1_000) {
+            throw new IllegalArgumentException("seed batch size must be between 1 and 1000");
+        }
+        int affectedRows = commands.insertSeedBatch(List.copyOf(rows));
+        if (affectedRows != rows.size()) {
+            throw new IllegalStateException("seed insert affected " + affectedRows
+                    + " rows; expected " + rows.size());
+        }
     }
 
     private void requireUpdated(long id, int affectedRows) {

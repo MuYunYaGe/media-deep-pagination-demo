@@ -1,0 +1,8 @@
+demo:
+  pagination:
+    hot-category-ids: ${HOT_CATEGORY_IDS:1001,1002}
+    warmup-enabled: true
+
+logging:
+  level:
+    com.example.mediapagination: INFO
