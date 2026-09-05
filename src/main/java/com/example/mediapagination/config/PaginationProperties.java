@@ -47,6 +47,8 @@ public class PaginationProperties {
 
     private List<Long> hotCategoryIds = new ArrayList<>(List.of(1001L, 1002L));
 
+    private boolean warmupEnabled = true;
+
     public int getWindowSize() {
         return windowSize;
     }
@@ -133,5 +135,13 @@ public class PaginationProperties {
 
     public void setHotCategoryIds(List<Long> hotCategoryIds) {
         this.hotCategoryIds = new ArrayList<>(hotCategoryIds);
+    }
+
+    public boolean isWarmupEnabled() {
+        return warmupEnabled;
+    }
+
+    public void setWarmupEnabled(boolean warmupEnabled) {
+        this.warmupEnabled = warmupEnabled;
     }
 }

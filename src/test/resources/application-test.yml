@@ -1,6 +1,7 @@
 demo:
   pagination:
     hot-category-ids: []
+    warmup-enabled: false
 
 logging:
   level:
