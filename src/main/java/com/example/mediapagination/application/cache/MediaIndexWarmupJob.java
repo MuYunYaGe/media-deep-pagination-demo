@@ -28,18 +28,21 @@ public class MediaIndexWarmupJob {
     private final LeaseLock lock;
     private final MediaIndexKeys keys;
     private final PaginationProperties properties;
+    private final DirtyCategoryRegistry dirtyCategories;
 
     public MediaIndexWarmupJob(
             MediaIndexRebuilder rebuilder,
             MediaIndexStore index,
             LeaseLock lock,
             MediaIndexKeys keys,
-            PaginationProperties properties) {
+            PaginationProperties properties,
+            DirtyCategoryRegistry dirtyCategories) {
         this.rebuilder = Objects.requireNonNull(rebuilder, "rebuilder");
         this.index = Objects.requireNonNull(index, "index");
         this.lock = Objects.requireNonNull(lock, "lock");
         this.keys = Objects.requireNonNull(keys, "keys");
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.dirtyCategories = Objects.requireNonNull(dirtyCategories, "dirtyCategories");
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -66,6 +69,7 @@ public class MediaIndexWarmupJob {
         }
         Lease lease = acquired.orElseThrow();
         try {
+            repairDirtyCategories();
             refreshConfiguredCategories();
         } finally {
             try {
@@ -86,6 +90,22 @@ public class MediaIndexWarmupJob {
                 }
             } catch (RuntimeException failure) {
                 log.warn("configured media index warmup failed categoryId={}",
+                        categoryId, failure);
+            }
+        }
+    }
+
+    void repairDirtyCategories() {
+        for (long categoryId : dirtyCategories.drain(100)) {
+            try {
+                var result = rebuilder.rebuild(categoryId, RebuildMode.FORCE);
+                if (result.status() == com.example.mediapagination.application.model.RebuildResult.Status.FAILED
+                        || result.status() == com.example.mediapagination.application.model.RebuildResult.Status.SKIPPED_LOCKED) {
+                    dirtyCategories.mark(categoryId);
+                }
+            } catch (RuntimeException failure) {
+                dirtyCategories.mark(categoryId);
+                log.warn("dirty media index repair failed categoryId={}",
                         categoryId, failure);
             }
         }

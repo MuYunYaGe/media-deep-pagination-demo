@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mediapagination.infrastructure.mysql.MediaCommandMapper">
+
+    <insert id="insert" parameterType="com.example.mediapagination.infrastructure.mysql.MediaRow"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO media
+            (category_id, title, publish_time, status, created_at, updated_at)
+        VALUES
+            (#{categoryId}, #{title}, #{publishTime}, #{status}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE media
+        SET status = #{status}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCategory">
+        UPDATE media
+        SET category_id = #{categoryId}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updatePublishTime">
+        UPDATE media
+        SET publish_time = #{publishTime}, updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+</mapper>
