@@ -94,6 +94,9 @@ class DefaultMediaIndexCoordinatorTest {
 
     @Test
     void asynchronousEntryPointRequestsAForcedRebuild() {
+        when(rebuilder.rebuild(1001L, RebuildMode.FORCE))
+                .thenReturn(RebuildResult.rebuilt(1L, Duration.ZERO));
+
         coordinator.requestRebuild(1001L);
 
         verify(rebuilder).rebuild(1001L, RebuildMode.FORCE);

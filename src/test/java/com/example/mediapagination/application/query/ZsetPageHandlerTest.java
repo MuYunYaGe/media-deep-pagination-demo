@@ -127,7 +127,7 @@ class ZsetPageHandlerTest {
         MediaPageResult mysqlResult = new MediaPageResult(
                 1001L, 2, 10, 21L, 3L, false, PageStrategy.OFFSET,
                 CacheStatus.NOT_USED, false, List.of(media(9L)));
-        when(offset.query(mysqlQuery)).thenReturn(mysqlResult);
+        when(offset.queryWithoutMetrics(mysqlQuery)).thenReturn(mysqlResult);
 
         MediaPageResult result = handler.query(query(2));
 
@@ -156,7 +156,7 @@ class ZsetPageHandlerTest {
         when(mysql.findPublishedByIds(List.of(9L))).thenThrow(databaseFailure);
 
         assertThatThrownBy(() -> handler.query(query(1))).isSameAs(databaseFailure);
-        verify(offset, never()).query(org.mockito.ArgumentMatchers.any());
+        verify(offset, never()).queryWithoutMetrics(org.mockito.ArgumentMatchers.any());
     }
 
     private static MediaPageQuery query(int page) {
